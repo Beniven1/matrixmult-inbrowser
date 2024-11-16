@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chatbot with Wikipedia Fetching</title>
+    <title>Dynamic AI Chatbot with Wikipedia</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjs/lib/browser/math.js"></script>
     <style>
         body { font-family: Arial, sans-serif; }
         #chatbox { border: 1px solid #ccc; height: 200px; overflow-y: auto; padding: 10px; }
@@ -13,11 +14,10 @@
         .user-message { color: blue; }
         .bot-message { color: green; }
         .thought-message { color: gray; font-style: italic; }
-        .wikipedia-content { border: 1px solid #ccc; padding: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <h1>AI Chatbot</h1>
+    <h1>Dynamic AI Chatbot</h1>
     <div id="chatbox"></div>
     <div id="thoughtsbox"></div>
     <input type="text" id="userInput" placeholder="Type your message here...">
@@ -58,40 +58,62 @@
             thoughtsbox.appendChild(thoughtsElement);
         }
 
-        // Function to get a response from the bot and fetch Wikipedia content if needed
+        // Function to get a response from the bot
         async function getBotResponse(input) {
             let response;
             let thoughts = "Thinking...";
 
-            if (input.toLowerCase().includes("wikipedia")) {
-                const wikiContent = await fetchWikipediaPage(input);
-                response = wikiContent ? wikiContent : "I couldn't retrieve the information.";
-                thoughts = "Fetching Wikipedia page content.";
-            } else {
-                response = "I'm not sure how to respond to that. Can you ask something else?";
-                thoughts = "User asked something unclear.";
+            // Check if the input is a math expression
+            if (isMathExpression(input)) {
+                response = math.evaluate(input).toString();
+                thoughts = "Calculating the result.";
+            } 
+            // Check for factual inquiries
+            else if (input.toLowerCase().includes("color of") || input.toLowerCase().includes("colour of")) {
+                const query = input.replace(/color of |colour of /i, '').trim();
+                response = await fetchWikipediaAnswer(query);
+                thoughts = `Searching for the color of "${query}".`;
+            } 
+            else if (input.toLowerCase().includes("how are you")) {
+                response = "I'm just a bunch of code, but I'm here to help you!";
+                thoughts = "User asked about my well-being.";
+            } 
+            else {
+                response = "I'm not sure how to respond to that. Let me find out!";
+                thoughts = "User asked something unclear. Searching Wikipedia.";
+                const query = input.trim();
+                response = await fetchWikipediaAnswer(query);
             }
 
             return { response, thoughts };
         }
 
-        // Function to fetch the HTML content of a Wikipedia page
-        async function fetchWikipediaPage(query) {
-            const pageTitle = query.replace("wikipedia ", "").trim();
-            const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(pageTitle)}`;
+        // Function to check if the input is a math expression
+        function isMathExpression(input) {
+            const mathExpressionPattern = /^[0-9+\-*/().\s]+$/; // Simple pattern for math expressions
+            return mathExpressionPattern.test(input);
+        }
+
+        // Function to fetch information from Wikipedia
+        async function fetchWikipediaAnswer(query) {
+            const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&list=search&srsearch=${encodeURIComponent(query)}&origin=*`;
             try {
                 const response = await fetch(url);
-                const text = await response.text();
-                
-                // Extract content from the fetched HTML (this is a basic way)
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(text, 'text/html');
-                const content = doc.querySelector('.mw-parser-output').innerText; // Get main content
-                return content.split('\n').slice(0, 5).join('\n'); // Return the first 5 lines for brevity
+                const data = await response.json();
+                if (data.query.search.length > 0) {
+                    const snippet = data.query.search[0].snippet;
+                    return rewordResponse(snippet); // Reword the response
+                }
+                return "I couldn't find relevant information.";
             } catch (error) {
                 console.error("Error fetching Wikipedia page:", error);
-                return null;
+                return "There was an error retrieving information.";
             }
+        }
+
+        // Function to reword the response from Wikipedia
+        function rewordResponse(snippet) {
+            return snippet.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&'); // Clean HTML entities and tags
         }
     </script>
 </body>
